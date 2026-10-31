@@ -1,0 +1,9 @@
+/etc/appfilter/feature_cn.cfg
+/etc/appfilter/feature_en.cfg
+/etc/config/appfilter
+/etc/config/user_info
+/etc/init.d/appfilter
+/usr/bin/gen_class.sh
+/usr/bin/hnat.sh
+/usr/bin/oaf_rule
+/usr/bin/oafd

@@ -1,0 +1,54 @@
+name: Build oaf_stub.ko
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq zstd
+
+      - name: Download ImmortalWrt SDK
+        run: |
+          SDK_URL="https://downloads.immortalwrt.org/snapshots/targets/airoha/an7581/immortalwrt-sdk-airoha-an7581_gcc-14.4.0_musl.Linux-x86_64.tar.zst"
+          echo "Downloading SDK (~300MB)..."
+          curl -sL --retry 3 -m 1800 -o /tmp/sdk.tar.zst "$SDK_URL"
+          echo "Extracting..."
+          mkdir -p /tmp/sdk
+          tar --zstd -xf /tmp/sdk.tar.zst -C /tmp/sdk
+          echo "SDK_HOME=$(realpath /tmp/sdk/immortalwrt-sdk-airoha-an7581_gcc-14.4.0_musl.Linux-x86_64)" >> $GITHUB_ENV
+
+      - name: Compile oaf_stub.ko
+        run: |
+          SDK="$SDK_HOME"
+          KDIR="$SDK/build_dir/target-aarch64_cortex-a53_musl/linux-airoha_an7581/linux-6.18.55"
+          echo "SDK: $SDK"
+          echo "KDIR: $KDIR"
+          test -f "$KDIR/Makefile" || { echo "Kernel tree missing: $KDIR"; exit 1; }
+          head -4 "$KDIR/Makefile" | grep -E "VERSION|PATCHLEVEL|SUBLEVEL"
+
+          make -C "$KDIR" M="$(pwd)/ponwrt/src" modules \
+            ARCH=arm64 \
+            CROSS_COMPILE="$SDK/staging_dir/toolchain-aarch64_cortex-a53_gcc-14.4.0_musl/bin/aarch64-openwrt-linux-"
+
+      - name: Verify build
+        run: |
+          file ponwrt/src/oaf_stub.ko
+          modinfo ponwrt/src/oaf_stub.ko
+          strings ponwrt/src/oaf_stub.ko | grep vermagic=
+          nm ponwrt/src/oaf_stub.ko | grep __nf_ct_ext_find
+          cp ponwrt/src/oaf_stub.ko ponwrt/prebuilt/oaf_stub.ko
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: oaf_stub.ko
+          path: ponwrt/src/oaf_stub.ko
